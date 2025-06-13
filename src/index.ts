@@ -1,1 +1,1 @@
-export { default as Knobby } from './knobby';
+export { default as Knobbler } from './knobbler';
