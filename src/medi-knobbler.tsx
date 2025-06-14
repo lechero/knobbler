@@ -2,35 +2,22 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, useMotionValue, animate } from 'framer-motion';
 
 export interface MediKnobblerProps {
-	/** Current value */
 	value: number;
-	/** Change handler */
 	onChange: (value: number) => void;
-	/** Minimum value */
 	min?: number;
-	/** Maximum value */
 	max?: number;
-	/** Coarse step size */
 	tickStep?: number;
-	/** Fine step size when shift key or beyond precisionDistance */
 	precisionStep?: number;
-	/** Distance threshold in px for switching to precisionStep */
 	precisionDistance?: number;
-	/** Optional array of precision steps per band */
 	precisionSteps?: number[];
-	/** Deadzone radius in px where drag won't change value */
 	deadzone?: number;
-	/** Diameter of the control in px */
+	/** Diameter of the full circle */
 	diameter?: number;
-	/** Track (background arc) color */
 	trackColor?: string;
-	/** Active (filled arc) color */
 	activeColor?: string;
-	/** Thumb circle color */
 	thumbColor?: string;
-	/** Orientation of half-circle */
 	orientation: 'top' | 'bottom' | 'left' | 'right';
-	/** Centered children overlay */
+	direction?: 'normal' | 'reverse';
 	children?: React.ReactNode;
 }
 
@@ -49,90 +36,147 @@ export const MediKnobbler: React.FC<MediKnobblerProps> = ({
 	activeColor = '#4f46e5',
 	thumbColor = '#ffffff',
 	orientation,
+	direction = 'normal',
 	children,
 }) => {
-	const radius = diameter / 2;
-	const padding = 4;
-	const effectiveRadius = radius - padding;
-	const center = { x: radius, y: radius };
-	const innerR = effectiveRadius - 5;
+	// Compute render box
+	const renderWidth = (orientation === 'left' || orientation === 'right')
+		? diameter / 2
+		: diameter;
+	const renderHeight = (orientation === 'top' || orientation === 'bottom')
+		? diameter / 2
+		: diameter;
 
-	// Determine half-circle angles
-	const { startAngle, arcLength } = React.useMemo(() => {
+	// Full circle center + radius
+	const center = { x: diameter / 2, y: diameter / 2 };
+	const innerR = diameter / 2 - 9;
+	const round = (n: number) => parseFloat(n.toFixed(3));
+
+	// Base half-circle
+	const base = React.useMemo(() => {
 		switch (orientation) {
-			case 'top':
-				return { startAngle: 180, arcLength: 180 };
-			case 'bottom':
-				return { startAngle: 0, arcLength: 180 };
-			case 'left':
-				return { startAngle: 90, arcLength: 180 };
-			case 'right':
-				return { startAngle: -90, arcLength: 180 };
-			default:
-				return { startAngle: -90, arcLength: 180 };
+			case 'top': return { start: 180, length: 180 };
+			case 'bottom': return { start: 0, length: 180 };
+			case 'left': return { start: 90, length: 180 };
+			case 'right': return { start: -90, length: 180 };
+			default: return { start: -90, length: 180 };
 		}
 	}, [orientation]);
 
-	const round = (n: number) => parseFloat(n.toFixed(3));
-	const steps = precisionSteps && precisionSteps.length > 0 ? precisionSteps : [precisionStep];
-	const decimals = Math.max(...steps.map(s => s.toString().split('.')[1]?.length || 0));
+	// Reverse logic
+	const { startAngle, arcLength } = React.useMemo(() => {
+		const { start, length } = base;
+		return direction === 'reverse'
+			? { startAngle: start + length, arcLength: -length }
+			: { startAngle: start, arcLength: length };
+	}, [base, direction]);
+
+	// Precision bands
+	const steps = precisionSteps && precisionSteps.length
+		? precisionSteps
+		: [precisionStep];
+	const decimals = Math.max(...steps.map(s => (s.toString().split('.')[1]?.length || 0)));
 	const bands = steps.length;
 	const maxRange = Math.max(innerR - deadzone, 0);
-	const bandWidth = bands > 0 ? maxRange / bands : 0;
+	const bandWidth = bands ? maxRange / bands : 0;
 
-	// Map a mouse point to a value, tracking only one axis based on orientation
-	const valueFromPoint = useCallback(
-		(x: number, y: number) => {
-			let fraction: number;
-			if (orientation === 'top' || orientation === 'bottom') {
-				// horizontal drag
-				const dx = Math.min(Math.max(x, 0), diameter);
-				fraction = dx / diameter;
-			} else {
-				// left or right => vertical drag
-				const dy = Math.min(Math.max(y, 0), diameter);
-				fraction = 1 - dy / diameter; // top = 1, bottom = 0
-			}
-			const raw = min + fraction * (max - min);
+	// Pointer to value
+	const valueFromPoint = useCallback((x: number, y: number) => {
+		const fx = orientation === 'right' ? x + diameter / 2 : x;
+		const fy = orientation === 'bottom' ? y + diameter / 2 : y;
+		const dx = fx - center.x;
+		const dy = fy - center.y;
+		const dist = Math.hypot(dx, dy);
+		if (dist < deadzone) return value;
 
-			// determine dynamic step based on precision bands or distance
-			let stepSize = tickStep;
-			const dist = orientation === 'top' || orientation === 'bottom'
-				? Math.abs(x - center.x)
-				: Math.abs(y - center.y);
+		let ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+		if (ang < 0) ang += 360;
 
-			if (precisionSteps && precisionSteps.length) {
-				const idx = Math.min(bands - 1, Math.floor((dist - deadzone) / bandWidth));
-				stepSize = steps[idx];
-			} else {
-				stepSize = dist > precisionDistance ? precisionStep : tickStep;
-			}
+		const absLen = Math.abs(arcLength);
+		let rel = arcLength >= 0
+			? (ang - startAngle + 360) % 360
+			: (startAngle - ang + 360) % 360;
+		rel = Math.min(rel, absLen);
 
-			// snap and clamp
-			const snapped = Math.round(raw / stepSize) * stepSize;
-			const clamped = Math.min(max, Math.max(min, snapped));
-			return parseFloat(clamped.toFixed(decimals));
-		},
-		[diameter, center.x, center.y, deadzone, bands, bandWidth, min, max, tickStep, precisionStep, precisionDistance, precisionSteps, steps, decimals, orientation]
-	);
+		const raw = min + (rel / absLen) * (max - min);
 
-	// motion value and angle sync
+		let stepSize = tickStep;
+		if (precisionSteps && precisionSteps.length) {
+			const idx = Math.min(bands - 1, Math.floor((dist - deadzone) / bandWidth));
+			stepSize = steps[idx];
+		} else {
+			stepSize = dist > precisionDistance ? precisionStep : tickStep;
+		}
+
+		const snapped = Math.round(raw / stepSize) * stepSize;
+		return parseFloat(Math.min(max, Math.max(min, snapped)).toFixed(decimals));
+	}, [orientation, diameter, center, deadzone, startAngle, arcLength, min, max, tickStep, precisionStep, precisionDistance, precisionSteps, bands, bandWidth, steps, decimals, value]);
+
+	// Motion value
 	const motionValue = useMotionValue(value);
-	const [currentAngle, setCurrentAngle] = useState(() => startAngle + ((value - min) / (max - min)) * arcLength);
+	const [currentAngle, setCurrentAngle] = useState(
+		startAngle + ((value - min) / (max - min)) * arcLength
+	);
 	useEffect(() => {
 		animate(motionValue, value, { type: 'spring', stiffness: 300, damping: 30 });
-		const unsub = motionValue.on('change', v => setCurrentAngle(startAngle + ((v - min) / (max - min)) * arcLength));
-		return unsub;
-	}, [value, motionValue, min, max, startAngle, arcLength]);
+		return motionValue.on('change', v => {
+			setCurrentAngle(startAngle + ((v - min) / (max - min)) * arcLength);
+		});
+	}, [value, motionValue, startAngle, arcLength, min, max]);
 
-	// pointer handlers
+	// Build paths
+	const startRad = (startAngle * Math.PI) / 180;
+	const endRadBase = ((startAngle + arcLength) * Math.PI) / 180;
+	const largeArcFlag = Math.abs(arcLength) > 180 ? 1 : 0;
+	const sweepFlag = arcLength > 0 ? 1 : 0;
+	const trackD =
+		`M ${round(center.x + innerR * Math.cos(startRad))} ${round(center.y + innerR * Math.sin(startRad))}` +
+		` A ${round(innerR)} ${round(innerR)} 0 ${largeArcFlag} ${sweepFlag} ` +
+		`${round(center.x + innerR * Math.cos(endRadBase))} ${round(center.y + innerR * Math.sin(endRadBase))}`;
+
+	const endRad = (currentAngle * Math.PI) / 180;
+	// Compute relative angle for active segment (handles reverse correctly)
+	const relAngle = arcLength >= 0
+		? (currentAngle - startAngle + 360) % 360
+		: (startAngle - currentAngle + 360) % 360;
+	const activeLargeFlag = relAngle > 180 ? 1 : 0;
+	const activeD =
+		`M ${round(center.x + innerR * Math.cos(startRad))} ${round(center.y + innerR * Math.sin(startRad))}` +
+		` A ${round(innerR)} ${round(innerR)} 0 ${activeLargeFlag} ${sweepFlag} ` +
+		`${round(center.x + innerR * Math.cos(endRad))} ${round(center.y + innerR * Math.sin(endRad))}`;
+
+	// pathLength only
+	const rawFrac = (value - min) / (max - min);
+	const pathLength = Math.abs(rawFrac);
+
+	// ticks
+	const ticks = Array.from(
+		{ length: Math.floor((max - min) / tickStep) + 1 },
+		(_, i) => {
+			const v = min + i * tickStep;
+			const ang = ((startAngle + ((v - min) / (max - min)) * arcLength) * Math.PI) / 180;
+			return {
+				x1: round(center.x + (innerR - 5) * Math.cos(ang)),
+				y1: round(center.y + (innerR - 5) * Math.sin(ang)),
+				x2: round(center.x + innerR * Math.cos(ang)),
+				y2: round(center.y + innerR * Math.sin(ang)),
+			};
+		}
+	);
+
+	// viewBox crop
+	let viewBox: string;
+	if (orientation === 'top') viewBox = `0 0 ${diameter} ${diameter / 2}`;
+	else if (orientation === 'bottom') viewBox = `0 ${diameter / 2} ${diameter} ${diameter / 2}`;
+	else if (orientation === 'left') viewBox = `0 0 ${diameter / 2} ${diameter}`;
+	else viewBox = `${diameter / 2} 0 ${diameter / 2} ${diameter}`;
+
+	// pointer
 	const containerRef = useRef<HTMLDivElement>(null);
 	const handlePointerMove = useCallback((e: PointerEvent) => {
 		if (!containerRef.current) return;
 		const rect = containerRef.current.getBoundingClientRect();
-		const x = e.clientX - rect.left;
-		const y = e.clientY - rect.top;
-		onChange(valueFromPoint(x, y));
+		onChange(valueFromPoint(e.clientX - rect.left, e.clientY - rect.top));
 	}, [onChange, valueFromPoint]);
 
 	const handlePointerUp = useCallback(() => {
@@ -141,45 +185,34 @@ export const MediKnobbler: React.FC<MediKnobblerProps> = ({
 	}, [handlePointerMove]);
 
 	const handlePointerDown = (e: React.PointerEvent) => {
+		motionValue.stop();
 		e.currentTarget.setPointerCapture(e.pointerId);
 		window.addEventListener('pointermove', handlePointerMove);
 		window.addEventListener('pointerup', handlePointerUp);
 	};
 
-	// build arc path
-	const startRad = (startAngle * Math.PI) / 180;
-	const endRad = (currentAngle * Math.PI) / 180;
-	const relSweep = (currentAngle - startAngle + 360) % 360;
-	const largeArc = relSweep > 180 ? 1 : 0;
-	const arcD =
-		`M ${round(center.x + innerR * Math.cos(startRad))} ${round(center.y + innerR * Math.sin(startRad))}` +
-		` A ${round(innerR)} ${round(innerR)} 0 ${largeArc} 1 ` +
-		`${round(center.x + innerR * Math.cos(endRad))} ${round(center.y + innerR * Math.sin(endRad))}`;
-
-	const pathLength = (value - min) / (max - min);
-
-	// create ticks along half arc
-	const ticks: { x1: number; y1: number; x2: number; y2: number }[] = [];
-	for (let v = min; v <= max; v += tickStep) {
-		const ang = ((startAngle + ((v - min) / (max - min)) * arcLength) * Math.PI) / 180;
-		ticks.push({
-			x1: round(center.x + (innerR - 5) * Math.cos(ang)),
-			y1: round(center.y + (innerR - 5) * Math.sin(ang)),
-			x2: round(center.x + innerR * Math.cos(ang)),
-			y2: round(center.y + innerR * Math.sin(ang)),
-		});
-	}
-
 	return (
 		<div
 			ref={containerRef}
 			className="inline-block relative"
-			style={{ width: diameter, height: diameter }}
+			style={{ width: renderWidth, height: renderHeight, overflow: 'hidden' }}
 			onPointerDown={handlePointerDown}
 		>
-			<svg width={diameter} height={diameter}>
-				<circle cx={center.x} cy={center.y} r={innerR} stroke={trackColor} strokeWidth={10} fill="none" />
-				<motion.path d={arcD} stroke={activeColor} strokeWidth={10} fill="none" style={{ pathLength }} initial={false} />
+			<svg
+				width={renderWidth}
+				height={renderHeight}
+				viewBox={viewBox}
+				preserveAspectRatio="xMinYMin meet"
+			>
+				<path d={trackD} stroke={trackColor} strokeWidth={10} fill="none" />
+				<motion.path
+					d={activeD}
+					stroke={activeColor}
+					strokeWidth={10}
+					fill="none"
+					style={{ pathLength }}
+					initial={false}
+				/>
 				{ticks.map((t, i) => (
 					<line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={trackColor} strokeWidth={2} />
 				))}

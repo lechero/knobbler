@@ -12,8 +12,11 @@ const meta: Meta<MediKnobblerProps> = {
 		activeColor: { control: 'color' },
 		thumbColor: { control: 'color' },
 		orientation: {
-			control: { type: 'inline-radio', options: ['top', 'bottom', 'left', 'right'] }
-		}
+			control: { type: 'inline-radio', options: ['top', 'bottom', 'left', 'right'] },
+		},
+		direction: {
+			control: { type: 'inline-radio', options: ['normal', 'reverse'] },
+		},
 	},
 	args: {
 		value: 50,
@@ -28,6 +31,7 @@ const meta: Meta<MediKnobblerProps> = {
 		activeColor: '#2563eb',
 		thumbColor: '#3b82f6',
 		orientation: 'top',
+		direction: 'normal',
 	},
 } satisfies Meta<MediKnobblerProps>;
 
@@ -47,79 +51,66 @@ const outlineStyle: React.CSSProperties = {
 	].join(','),
 };
 
-export const Top: Story = {
+const Template: Story = {
 	render: (args) => {
 		const [value, setValue] = useState(args.value as number);
 		return (
-			<MediKnobbler {...args} value={value} onChange={setValue}>
-				<span style={outlineStyle} className="text-lg font-semibold">
-					{value}
-				</span>
-			</MediKnobbler>
+			<div style={{ display: 'inline-block', padding: 20, border: '1px solid #ddd' }}>
+				<MediKnobbler {...args} value={value} onChange={setValue}>
+					<span style={outlineStyle} className="text-lg font-semibold">
+						{value}
+					</span>
+				</MediKnobbler>
+			</div>
 		);
-	}
-};
-
-export const Bottom: Story = {
-	render: (args) => {
-		const [value, setValue] = useState(args.value as number);
-		return (
-			<MediKnobbler {...args} value={value} onChange={setValue}>
-				<span style={outlineStyle} className="text-purple-600 text-lg">
-					{value}%
-				</span>
-			</MediKnobbler>
-		);
-	},
-	args: {
-		orientation: 'bottom',
-		trackColor: '#faf5ff',
-		activeColor: '#7c3aed',
-		thumbColor: '#ddd6fe',
 	},
 };
 
-export const Left: Story = {
-	render: (args) => {
-		const [value, setValue] = useState(args.value as number);
-		return (
-			<MediKnobbler {...args} value={value} onChange={setValue}>
-				<span style={outlineStyle} className="text-green-600 text-lg">
-					{value}
-				</span>
-			</MediKnobbler>
-		);
-	},
-	args: {
-		orientation: 'left',
-		trackColor: '#ecfdf5',
-		activeColor: '#10b981',
-		thumbColor: '#a7f3d0',
-		min: 0,
-		max: 1,
-		tickStep: 0.1,
-		precisionStep: 0.01,
-		precisionDistance: 15,
-		diameter: 120,
-	},
+export const TopNormal = {
+	...Template,
+	name: 'Top / Normal',
+	args: { orientation: 'top', direction: 'normal' },
 };
 
-export const Right: Story = {
-	render: (args) => {
-		const [value, setValue] = useState(args.value as number);
-		return (
-			<MediKnobbler {...args} value={value} onChange={setValue}>
-				<span style={outlineStyle} className="text-amber-600 text-lg">
-					{value}
-				</span>
-			</MediKnobbler>
-		);
-	},
-	args: {
-		orientation: 'right',
-		trackColor: '#fffbeb',
-		activeColor: '#f59e0b',
-		thumbColor: '#fde68a',
-	},
+export const TopReverse = {
+	...Template,
+	name: 'Top / Reverse',
+	args: { orientation: 'top', direction: 'reverse', activeColor: '#e11d48' },
+};
+
+export const BottomNormal = {
+	...Template,
+	name: 'Bottom / Normal',
+	args: { orientation: 'bottom', direction: 'normal', trackColor: '#faf5ff', activeColor: '#7c3aed', thumbColor: '#ddd6fe' },
+};
+
+export const BottomReverse = {
+	...Template,
+	name: 'Bottom / Reverse',
+	args: { orientation: 'bottom', direction: 'reverse', trackColor: '#fef3c7', activeColor: '#ca8a04', thumbColor: '#fde047' },
+};
+
+export const LeftNormal = {
+	...Template,
+	name: 'Left / Normal',
+	args: { orientation: 'left', direction: 'normal', trackColor: '#ecfdf5', activeColor: '#10b981', thumbColor: '#a7f3d0', min: 0, max: 1, tickStep: 0.1, precisionStep: 0.01, precisionDistance: 15, diameter: 120 },
+};
+
+export const LeftReverse = {
+	...Template,
+	name: 'Left / Reverse',
+	args: { orientation: 'left', direction: 'reverse', trackColor: '#d1fae5', activeColor: '#047857', thumbColor: '#6ee7b7', min: 0, max: 1, tickStep: 0.1, precisionStep: 0.01, precisionDistance: 15, diameter: 120 },
+};
+
+export const RightNormal = {
+	...Template,
+	name: 'Right / Normal',
+	args: { orientation: 'right', direction: 'normal', trackColor: '#fffbeb', activeColor: '#f59e0b', thumbColor: '#fde68a' },
+};
+
+export const RightReverse = {
+	...Template,
+	name: 'Right / Reverse',
+	args: { orientation: 'right', direction: 'reverse', trackColor: '#ffedd5', activeColor: '#b45309', thumbColor: '#fcd34d' },
 };
 

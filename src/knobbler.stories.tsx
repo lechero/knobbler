@@ -34,11 +34,13 @@ export const Default: Story = {
 	render: (args) => {
 		const [value, setValue] = useState(args.value as number);
 		return (
-			<Knobbler {...args} value={value} onChange={setValue}>
-				<span style={outlineStyle} className="text-lg font-semibold">
-					{value}
-				</span>
-			</Knobbler>
+			<div className="border border-foreground">
+				<Knobbler {...args} value={value} onChange={setValue}>
+					<span style={outlineStyle} className="text-lg font-semibold">
+						{value}
+					</span>
+				</Knobbler>
+			</div>
 		);
 	},
 	args: {
